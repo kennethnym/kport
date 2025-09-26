@@ -5,9 +5,10 @@ A terminal user interface (TUI) application for SSH port forwarding that reads f
 ## Features
 
 - **SSH Config Integration**: Automatically reads from `~/.ssh/config`
+- **Include Support**: Supports SSH config `Include` directive with glob patterns
 - **Interactive Host Selection**: Choose from configured SSH hosts using arrow keys
 - **Automatic Port Detection**: Scans remote host for listening ports using `netstat`, `ss`, or `lsof`
-- **Manual Port Forwarding**: Option to manually specify remote ports
+- **Manual Port Forwarding**: Option to manually specify remote ports with improved UI
 - **Real-time Port Forwarding**: Creates SSH tunnels similar to VSCode's remote SSH port forwarding
 - **Clean TUI Interface**: Built with Bubble Tea for a smooth terminal experience
 
@@ -74,7 +75,20 @@ Host dev-box
     HostName dev.example.com
     User developer
     Port 2222
+
+# Include additional config files
+Include ~/.ssh/config.d/*
+Include ~/.ssh/work-config
 ```
+
+### Include Support
+
+kport supports the SSH `Include` directive, allowing you to organize your SSH configuration across multiple files:
+
+- **Glob patterns**: `Include ~/.ssh/config.d/*`
+- **Specific files**: `Include ~/.ssh/work-config`
+- **Relative paths**: `Include config.d/servers`
+- **Cycle detection**: Prevents infinite loops from circular includes
 
 ## Authentication
 
