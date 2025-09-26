@@ -16,6 +16,7 @@ const (
 	StateConnecting
 	StateSelectPort
 	StateManualPort
+	StateStartingForward
 	StateForwarding
 )
 
@@ -75,6 +76,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePortSelection(msg)
 		case StateManualPort:
 			return m.updateManualPort(msg)
+		case StateStartingForward:
+			return m.updateStartingForward(msg)
 		case StateForwarding:
 			return m.updateForwarding(msg)
 		}
@@ -95,8 +98,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = StateForwarding
 		return m, nil
 	case ErrorMsg:
-		m.err = msg.Error
-		return m, tea.Quit
+		// Don't quit on errors, just show them and let user continue
+		m.message = fmt.Sprintf("Error: %v", msg.Error)
+		// Go back to appropriate state depending on current state
+		switch m.state {
+		case StateConnecting:
+			m.state = StateSelectPort
+			m.ports = []int{} // Show empty ports list
+		case StateStartingForward:
+			// Go back to port selection or manual port depending on where we came from
+			if len(m.ports) > 0 {
+				m.state = StateSelectPort
+			} else {
+				m.state = StateManualPort
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -163,6 +180,8 @@ func (m *Model) updatePortSelection(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter", " ":
 		m.selectedPort = m.cursor
+		m.state = StateStartingForward
+		m.message = "Starting port forwarding..."
 		// Start port forwarding
 		return m, StartPortForwarding(m.hosts[m.selectedHost], m.ports[m.selectedPort])
 	case "m":
@@ -188,6 +207,8 @@ func (m *Model) updateManualPort(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if m.manualPort != "" {
+			m.state = StateStartingForward
+			m.message = "Starting port forwarding..."
 			// Parse and start manual port forwarding
 			return m, StartManualPortForwarding(m.hosts[m.selectedHost], m.manualPort)
 		}
@@ -200,6 +221,20 @@ func (m *Model) updateManualPort(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(msg.String()) == 1 && msg.String() >= "0" && msg.String() <= "9" {
 			m.manualPort += msg.String()
 		}
+	}
+	return m, nil
+}
+
+// updateStartingForward handles the starting forward state
+func (m *Model) updateStartingForward(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "esc":
+		// Cancel the forwarding attempt
+		m.state = StateSelectPort
+		m.message = ""
+		return m, nil
 	}
 	return m, nil
 }
@@ -256,6 +291,8 @@ func (m *Model) View() string {
 		s.WriteString(m.renderPortSelection())
 	case StateManualPort:
 		s.WriteString(m.renderManualPort())
+	case StateStartingForward:
+		s.WriteString(m.renderStartingForward())
 	case StateForwarding:
 		s.WriteString(m.renderForwarding())
 	}
@@ -404,6 +441,23 @@ func (m *Model) renderManualPort() string {
 	s.WriteString("Controls:\n")
 	s.WriteString("  0-9: Enter digits  Backspace: Delete  Enter: Start forwarding\n")
 	s.WriteString("  Esc: Back  q: Quit\n")
+
+	return s.String()
+}
+
+// renderStartingForward renders the starting forward view
+func (m *Model) renderStartingForward() string {
+	var s strings.Builder
+	
+	startingStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#00BFFF")).
+		Bold(true)
+	
+	s.WriteString(startingStyle.Render("🚀 " + m.message))
+	s.WriteString("\n\n")
+	s.WriteString("Setting up SSH tunnel and port forwarding...\n\n")
+	s.WriteString("Controls:\n")
+	s.WriteString("  Esc: Cancel  q: Quit\n")
 
 	return s.String()
 }

@@ -28,10 +28,12 @@ func DetectPorts(host SSHHost) tea.Cmd {
 	return func() tea.Msg {
 		ports, err := detectRemotePorts(host)
 		if err != nil {
-			// Instead of returning an error that quits the app,
-			// return an empty ports list with a message
+			// Log the error for debugging but don't quit the app
+			fmt.Fprintf(os.Stderr, "Debug: Port detection failed for %s: %v\n", host.Name, err)
+			// Return empty ports list so user can still use manual port forwarding
 			return PortsDetectedMsg{Ports: []int{}}
 		}
+		fmt.Fprintf(os.Stderr, "Debug: Detected %d ports on %s: %v\n", len(ports), host.Name, ports)
 		return PortsDetectedMsg{Ports: ports}
 	}
 }
