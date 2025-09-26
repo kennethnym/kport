@@ -175,11 +175,15 @@ func (sc *SSHConfig) GetHosts() []SSHHost {
 	return sc.Hosts
 }
 
-// GetHostByName returns a specific host by name
+// GetHostByName returns a specific host by name with expanded variables
 func (sc *SSHConfig) GetHostByName(name string) (*SSHHost, error) {
 	for _, host := range sc.Hosts {
 		if host.Name == name {
-			return &host, nil
+			// Return a copy with expanded shell variables
+			expandedHost := host
+			expandedHost.User = expandShellVars(host.User)
+			expandedHost.Identity = expandShellVars(host.Identity)
+			return &expandedHost, nil
 		}
 	}
 	return nil, fmt.Errorf("host '%s' not found", name)

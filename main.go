@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"os/user"
+	"strings"
 )
 
 func main() {
@@ -90,9 +93,52 @@ func testConnection(hostName string) {
 	}
 	fmt.Println("")
 	
+	// Expand shell variables in the host config
+	expandedHost := *host
+	expandedHost.User = expandShellVars(host.User)
+	expandedHost.Identity = expandShellVars(host.Identity)
+	
+	if expandedHost.User != host.User {
+		fmt.Printf("Expanded user: %s -> %s\n", host.User, expandedHost.User)
+	}
+	if expandedHost.Identity != host.Identity {
+		fmt.Printf("Expanded identity: %s -> %s\n", host.Identity, expandedHost.Identity)
+	}
+	if expandedHost.User != host.User || expandedHost.Identity != host.Identity {
+		fmt.Println("")
+	}
+	
+	// Test SSH connection using ssh command (supports all SSH features)
+	fmt.Println("Testing SSH connection...")
+	fmt.Printf("Running: ssh -o ConnectTimeout=10 -o BatchMode=yes %s echo 'connection test'\n", expandedHost.Name)
+	
+	sshCmd := exec.Command("ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes", expandedHost.Name, "echo", "connection test")
+	output, err := sshCmd.Output()
+	if err != nil {
+		fmt.Printf("❌ SSH connection failed: %v\n", err)
+		fmt.Println("")
+		fmt.Println("Common SSH connection issues:")
+		fmt.Println("- SSH keys not set up or not in SSH agent")
+		fmt.Println("- Wrong username or hostname")
+		fmt.Println("- Host key verification failed")
+		fmt.Println("- SSH server not running or configured differently")
+		fmt.Println("- ProxyCommand or other SSH config issues")
+		fmt.Println("")
+		fmt.Println("Try running the SSH command manually:")
+		fmt.Printf("  ssh %s\n", expandedHost.Name)
+		return
+	}
+	
+	if strings.TrimSpace(string(output)) == "connection test" {
+		fmt.Printf("✅ SSH connection successful!\n")
+	} else {
+		fmt.Printf("⚠️  SSH connection partially successful but got unexpected output: %s\n", string(output))
+	}
+	fmt.Println("")
+	
 	// Test port detection
 	fmt.Println("Testing port detection...")
-	ports, err := detectRemotePorts(*host)
+	ports, err := detectRemotePorts(expandedHost)
 	if err != nil {
 		fmt.Printf("❌ Port detection failed: %v\n", err)
 		fmt.Println("")
@@ -107,4 +153,33 @@ func testConnection(hostName string) {
 	
 	fmt.Println("")
 	fmt.Println("You can still use manual port forwarding in the TUI even if port detection fails.")
+}
+
+// expandShellVars expands shell variables in SSH config values
+func expandShellVars(value string) string {
+	if value == "" {
+		return value
+	}
+	
+	// Handle $(whoami) and $USER
+	if strings.Contains(value, "$(whoami)") || strings.Contains(value, "$USER") {
+		currentUser, err := user.Current()
+		if err == nil {
+			value = strings.ReplaceAll(value, "$(whoami)", currentUser.Username)
+			value = strings.ReplaceAll(value, "$USER", currentUser.Username)
+		}
+	}
+	
+	// Handle $HOME and ~/
+	if strings.Contains(value, "$HOME") || strings.HasPrefix(value, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			value = strings.ReplaceAll(value, "$HOME", homeDir)
+			if strings.HasPrefix(value, "~/") {
+				value = strings.Replace(value, "~/", homeDir+"/", 1)
+			}
+		}
+	}
+	
+	return value
 }

@@ -6,10 +6,11 @@ A terminal user interface (TUI) application for SSH port forwarding that reads f
 
 - **SSH Config Integration**: Automatically reads from `~/.ssh/config`
 - **Include Support**: Supports SSH config `Include` directive with glob patterns
+- **Full SSH Compatibility**: Uses native `ssh` command - supports ProxyCommand, jump hosts, and all SSH features
 - **Interactive Host Selection**: Choose from configured SSH hosts using arrow keys
 - **Automatic Port Detection**: Scans remote host for listening ports using `netstat`, `ss`, or `lsof`
 - **Manual Port Forwarding**: Option to manually specify remote ports with improved UI
-- **Real-time Port Forwarding**: Creates SSH tunnels similar to VSCode's remote SSH port forwarding
+- **Real-time Port Forwarding**: Creates SSH tunnels using `ssh -L` command
 - **Clean TUI Interface**: Built with Bubble Tea for a smooth terminal experience
 
 ## Installation
@@ -95,9 +96,13 @@ Relative paths in includes are resolved relative to `~/.ssh/` directory, matchin
 
 ## Authentication
 
-The application supports:
+The application uses the native `ssh` command, so it supports all SSH authentication methods:
 - SSH key-based authentication (using IdentityFile from config)
 - SSH agent authentication (if SSH_AUTH_SOCK is set)
+- ProxyCommand for jump hosts and SSH containers
+- All other SSH configuration options (ControlMaster, etc.)
+
+This means if you can connect with `ssh hostname`, kport will work too!
 
 ## Requirements
 
@@ -115,10 +120,10 @@ The application supports:
 ## How It Works
 
 1. **Config Parsing**: Reads and parses your SSH config file to extract host information
-2. **SSH Connection**: Establishes SSH connection using configured authentication methods
-3. **Port Detection**: Runs commands like `netstat -tlnp` on the remote host to find listening ports
-4. **Port Forwarding**: Creates local TCP listener that forwards connections through SSH tunnel
-5. **Traffic Relay**: Copies data bidirectionally between local and remote connections
+2. **SSH Connection**: Uses native `ssh` command with all your configured options
+3. **Port Detection**: Runs commands like `netstat -tlnp` on the remote host via SSH to find listening ports
+4. **Port Forwarding**: Uses `ssh -L localport:localhost:remoteport hostname` for tunneling
+5. **Full Compatibility**: Works with ProxyCommand, jump hosts, SSH containers, and all SSH features
 
 ## Expected Behavior
 
@@ -135,10 +140,16 @@ The application gracefully handles connection failures and allows you to:
 
 ## Limitations
 
-- Password authentication is not implemented (use SSH keys or agent)
-- Host key verification uses `InsecureIgnoreHostKey` (should be improved for production use)
+- Requires `ssh` command to be available in PATH
 - Port detection requires `netstat`, `ss`, or `lsof` on the remote host
 - Connection failures are expected for non-existent or unreachable hosts
+
+## Advantages of Using Native SSH Command
+
+- **Full SSH Feature Support**: ProxyCommand, ControlMaster, jump hosts, etc.
+- **Consistent Behavior**: Same authentication and connection logic as your terminal
+- **SSH Container Support**: Works with containers that require ProxyCommand
+- **No Additional Setup**: If `ssh hostname` works, kport works too
 
 ## License
 

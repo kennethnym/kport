@@ -2,15 +2,13 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"golang.org/x/crypto/ssh"
 )
 
 // PortsDetectedMsg is sent when ports are detected
@@ -38,51 +36,8 @@ func DetectPorts(host SSHHost) tea.Cmd {
 	}
 }
 
-// detectRemotePorts connects to the remote host and detects open ports
+// detectRemotePorts connects to the remote host and detects open ports using ssh command
 func detectRemotePorts(host SSHHost) ([]int, error) {
-	// Create SSH client configuration
-	config := &ssh.ClientConfig{
-		User: host.User,
-		Auth: []ssh.AuthMethod{},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // In production, use proper host key verification
-		Timeout:         5 * time.Second, // Shorter timeout
-	}
-
-	// Add key-based authentication if identity file is specified
-	if host.Identity != "" {
-		key, err := loadPrivateKey(host.Identity)
-		if err == nil {
-			config.Auth = append(config.Auth, ssh.PublicKeys(key))
-		}
-	}
-
-	// Add SSH agent authentication if available
-	if agentAuth, err := sshAgentAuth(); err == nil {
-		config.Auth = append(config.Auth, agentAuth)
-	}
-
-	// If no auth methods available, add a dummy one to avoid empty auth
-	if len(config.Auth) == 0 {
-		config.Auth = append(config.Auth, ssh.PasswordCallback(func() (string, error) {
-			return "", fmt.Errorf("no authentication methods available")
-		}))
-	}
-
-	// Connect to the remote host
-	addr := net.JoinHostPort(host.Hostname, host.Port)
-	client, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s (%s): %w", host.Name, addr, err)
-	}
-	defer client.Close()
-
-	// Run netstat command to detect listening ports
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SSH session: %w", err)
-	}
-	defer session.Close()
-
 	// Try different commands to detect listening ports
 	commands := []string{
 		"netstat -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | cut -d: -f2 | sort -n | uniq",
@@ -91,23 +46,26 @@ func detectRemotePorts(host SSHHost) ([]int, error) {
 	}
 
 	var output []byte
+	var err error
+
 	for _, cmd := range commands {
-		session, err = client.NewSession()
-		if err != nil {
-			continue
-		}
+		fmt.Fprintf(os.Stderr, "Debug: Running command on %s: %s\n", host.Name, cmd)
 		
-		output, err = session.Output(cmd)
-		session.Close()
+		// Use ssh command directly - this supports all SSH features including ProxyCommand
+		sshCmd := exec.Command("ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes", host.Name, cmd)
 		
+		output, err = sshCmd.Output()
 		if err == nil && len(output) > 0 {
+			fmt.Fprintf(os.Stderr, "Debug: Command succeeded, got output\n")
 			break
 		}
+		fmt.Fprintf(os.Stderr, "Debug: Command failed: %v\n", err)
 	}
 
 	if err != nil || len(output) == 0 {
+		fmt.Fprintf(os.Stderr, "Debug: All port detection commands failed, trying common ports\n")
 		// Fallback: try common ports
-		return detectCommonPorts(client), nil
+		return detectCommonPorts(host), nil
 	}
 
 	// Parse the output to extract port numbers
@@ -133,56 +91,29 @@ func detectRemotePorts(host SSHHost) ([]int, error) {
 	return ports, nil
 }
 
-// detectCommonPorts tries to detect common ports by attempting connections
-func detectCommonPorts(client *ssh.Client) []int {
+// detectCommonPorts tries to detect common ports by testing connections through SSH
+func detectCommonPorts(host SSHHost) []int {
 	commonPorts := []int{80, 443, 3000, 3001, 4000, 5000, 8000, 8080, 8443, 9000}
 	var openPorts []int
 
+	fmt.Fprintf(os.Stderr, "Debug: Testing common ports on %s\n", host.Name)
+
 	for _, port := range commonPorts {
-		// Try to create a connection to the port through the SSH tunnel
-		conn, err := client.Dial("tcp", fmt.Sprintf("localhost:%d", port))
-		if err == nil {
-			conn.Close()
+		// Test if port is open using SSH to run a quick connection test
+		cmd := fmt.Sprintf("timeout 1 bash -c '</dev/tcp/localhost/%d' 2>/dev/null && echo 'open' || echo 'closed'", port)
+		sshCmd := exec.Command("ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host.Name, cmd)
+		
+		output, err := sshCmd.Output()
+		if err == nil && strings.TrimSpace(string(output)) == "open" {
 			openPorts = append(openPorts, port)
+			fmt.Fprintf(os.Stderr, "Debug: Port %d is open\n", port)
 		}
 	}
 
 	return openPorts
 }
 
-// loadPrivateKey loads a private key from file
-func loadPrivateKey(keyPath string) (ssh.Signer, error) {
-	// Expand tilde to home directory
-	if strings.HasPrefix(keyPath, "~/") {
-		homeDir, err := getHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		keyPath = strings.Replace(keyPath, "~", homeDir, 1)
-	}
 
-	keyBytes, err := readFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read private key file: %w", err)
-	}
-
-	key, err := ssh.ParsePrivateKey(keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	return key, nil
-}
-
-// getHomeDir returns the user's home directory
-func getHomeDir() (string, error) {
-	return os.UserHomeDir()
-}
-
-// readFile reads a file and returns its contents
-func readFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
-}
 
 // removeDuplicates removes duplicate integers from a slice
 func removeDuplicates(slice []int) []int {
