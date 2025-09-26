@@ -93,8 +93,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case ForwardingStartedMsg:
-		m.message = fmt.Sprintf("Port forwarding started: localhost:%d -> %s:%d", 
-			msg.LocalPort, m.hosts[m.selectedHost].Name, msg.RemotePort)
+		if msg.LocalPort == msg.RemotePort {
+			m.message = fmt.Sprintf("Port forwarding started: localhost:%d -> %s:%d (same port)", 
+				msg.LocalPort, m.hosts[m.selectedHost].Name, msg.RemotePort)
+		} else {
+			m.message = fmt.Sprintf("Port forwarding started: localhost:%d -> %s:%d (port %d was unavailable)", 
+				msg.LocalPort, m.hosts[m.selectedHost].Name, msg.RemotePort, msg.RemotePort)
+		}
 		m.state = StateForwarding
 		return m, nil
 	case ErrorMsg:
@@ -474,6 +479,27 @@ func (m *Model) renderForwarding() string {
 	s.WriteString("\n\n")
 	s.WriteString(m.message)
 	s.WriteString("\n\n")
+	
+	// Add helpful access information
+	accessStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true)
+	
+	s.WriteString(accessStyle.Render("Access your service:"))
+	s.WriteString("\n")
+	
+	// Extract local port from message for display
+	if strings.Contains(m.message, "localhost:") {
+		parts := strings.Split(m.message, "localhost:")
+		if len(parts) > 1 {
+			portPart := strings.Split(parts[1], " ")[0]
+			s.WriteString(fmt.Sprintf("  • http://localhost:%s\n", portPart))
+			s.WriteString(fmt.Sprintf("  • https://localhost:%s\n", portPart))
+			s.WriteString(fmt.Sprintf("  • Or connect to localhost:%s with any client\n", portPart))
+		}
+	}
+	
+	s.WriteString("\n")
 	s.WriteString("Controls:\n")
 	s.WriteString("  Esc: Stop forwarding and return  q: Quit\n")
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,12 @@ func main() {
 	// Check for connection test mode
 	if len(os.Args) > 2 && os.Args[1] == "--test-connect" {
 		testConnection(os.Args[2])
+		return
+	}
+	
+	// Check for port mapping test mode
+	if len(os.Args) > 2 && os.Args[1] == "--test-port" {
+		testPortMapping(os.Args[2])
 		return
 	}
 	
@@ -62,6 +69,7 @@ func testMode() {
 	fmt.Println("Note: TUI requires a proper terminal environment")
 	fmt.Println("")
 	fmt.Println("To test connection to a specific host: ./kport --test-connect <hostname>")
+	fmt.Println("To test port mapping logic: ./kport --test-port <port>")
 }
 
 // testConnection tests connecting to a specific host
@@ -182,4 +190,39 @@ func expandShellVars(value string) string {
 	}
 	
 	return value
+}
+
+// testPortMapping tests the port mapping logic
+func testPortMapping(portStr string) {
+	fmt.Printf("Testing port mapping for port: %s\n", portStr)
+	fmt.Println("=====================================")
+	
+	remotePort, err := strconv.Atoi(portStr)
+	if err != nil {
+		fmt.Printf("❌ Invalid port number: %s\n", portStr)
+		return
+	}
+	
+	if remotePort <= 0 || remotePort > 65535 {
+		fmt.Printf("❌ Port number must be between 1 and 65535\n")
+		return
+	}
+	
+	// Test the port mapping logic
+	localPort, samePort, err := findPreferredLocalPort(remotePort)
+	if err != nil {
+		fmt.Printf("❌ Failed to find available port: %v\n", err)
+		return
+	}
+	
+	if samePort {
+		fmt.Printf("✅ Port %d is available locally - using same port\n", localPort)
+		fmt.Printf("   Mapping: localhost:%d -> remote:%d\n", localPort, remotePort)
+	} else {
+		fmt.Printf("⚠️  Port %d is unavailable locally - using alternative port %d\n", remotePort, localPort)
+		fmt.Printf("   Mapping: localhost:%d -> remote:%d\n", localPort, remotePort)
+	}
+	
+	fmt.Println("")
+	fmt.Println("This is how kport will map the ports when forwarding.")
 }

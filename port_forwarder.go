@@ -119,13 +119,17 @@ func StartPortForwarding(host SSHHost, remotePort int) tea.Cmd {
 	return func() tea.Msg {
 		fmt.Fprintf(os.Stderr, "Debug: Starting port forwarding for %s:%d\n", host.Name, remotePort)
 		
-		// Find an available local port
-		localPort, err := findAvailablePort()
+		// Try to use the same port locally, fallback to random if unavailable
+		localPort, samePort, err := findPreferredLocalPort(remotePort)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Debug: Failed to find available port: %v\n", err)
 			return ErrorMsg{Error: fmt.Errorf("failed to find available local port: %w", err)}
 		}
-		fmt.Fprintf(os.Stderr, "Debug: Found available local port: %d\n", localPort)
+		if samePort {
+			fmt.Fprintf(os.Stderr, "Debug: Using same port locally: %d\n", localPort)
+		} else {
+			fmt.Fprintf(os.Stderr, "Debug: Port %d unavailable, using alternative: %d\n", remotePort, localPort)
+		}
 
 		// Create and start port forwarder using ssh command
 		forwarder := NewPortForwarder(host.Name, localPort, remotePort)
@@ -158,13 +162,17 @@ func StartManualPortForwarding(host SSHHost, portStr string) tea.Cmd {
 			return ErrorMsg{Error: fmt.Errorf("port number must be between 1 and 65535")}
 		}
 
-		// Find an available local port
-		localPort, err := findAvailablePort()
+		// Try to use the same port locally, fallback to random if unavailable
+		localPort, samePort, err := findPreferredLocalPort(remotePort)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Debug: Failed to find available port: %v\n", err)
 			return ErrorMsg{Error: fmt.Errorf("failed to find available local port: %w", err)}
 		}
-		fmt.Fprintf(os.Stderr, "Debug: Found available local port: %d\n", localPort)
+		if samePort {
+			fmt.Fprintf(os.Stderr, "Debug: Using same port locally: %d\n", localPort)
+		} else {
+			fmt.Fprintf(os.Stderr, "Debug: Port %d unavailable, using alternative: %d\n", remotePort, localPort)
+		}
 
 		// Create and start port forwarder using ssh command
 		forwarder := NewPortForwarder(host.Name, localPort, remotePort)
@@ -182,6 +190,32 @@ func StartManualPortForwarding(host SSHHost, portStr string) tea.Cmd {
 }
 
 
+
+// findPreferredLocalPort tries to use the same port as remote, fallback to random
+func findPreferredLocalPort(remotePort int) (localPort int, samePort bool, err error) {
+	// First try to use the same port as the remote port
+	if isPortAvailable(remotePort) {
+		return remotePort, true, nil
+	}
+	
+	// If same port is not available, find any available port
+	availablePort, err := findAvailablePort()
+	if err != nil {
+		return 0, false, err
+	}
+	
+	return availablePort, false, nil
+}
+
+// isPortAvailable checks if a specific port is available locally
+func isPortAvailable(port int) bool {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	listener.Close()
+	return true
+}
 
 // findAvailablePort finds an available local port
 func findAvailablePort() (int, error) {
