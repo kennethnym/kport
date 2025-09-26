@@ -77,13 +77,10 @@ func (sc *SSHConfig) loadConfigFromFileRecursive(path string, visited map[string
 			continue
 		}
 
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			continue
+		key, value, err := parseConfigLine(line)
+		if err != nil {
+			continue // Skip malformed lines
 		}
-
-		key := strings.ToLower(parts[0])
-		value := strings.Join(parts[1:], " ")
 
 		switch key {
 		case "include":
@@ -142,6 +139,13 @@ func (sc *SSHConfig) processInclude(pattern string, visited map[string]bool) err
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
 		pattern = filepath.Join(homeDir, pattern[2:])
+	} else if !filepath.IsAbs(pattern) {
+		// Relative paths are relative to ~/.ssh/
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
+		pattern = filepath.Join(homeDir, ".ssh", pattern)
 	}
 
 	// Handle glob patterns
@@ -179,4 +183,29 @@ func (sc *SSHConfig) GetHostByName(name string) (*SSHHost, error) {
 		}
 	}
 	return nil, fmt.Errorf("host '%s' not found", name)
+}
+
+// parseConfigLine parses a SSH config line, handling quoted values
+func parseConfigLine(line string) (key, value string, err error) {
+	// Find the first whitespace to separate key from value
+	parts := strings.SplitN(strings.TrimSpace(line), " ", 2)
+	if len(parts) < 2 {
+		return "", "", fmt.Errorf("invalid config line")
+	}
+
+	key = strings.ToLower(strings.TrimSpace(parts[0]))
+	valueStr := strings.TrimSpace(parts[1])
+
+	// Handle quoted values
+	if len(valueStr) >= 2 && 
+		((valueStr[0] == '"' && valueStr[len(valueStr)-1] == '"') ||
+		 (valueStr[0] == '\'' && valueStr[len(valueStr)-1] == '\'')) {
+		// Remove quotes
+		value = valueStr[1 : len(valueStr)-1]
+	} else {
+		// Handle unquoted values (may contain multiple words)
+		value = valueStr
+	}
+
+	return key, value, nil
 }
