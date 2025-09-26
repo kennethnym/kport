@@ -14,6 +14,7 @@ A terminal user interface (TUI) application for SSH port forwarding that reads f
 - **Interactive Host Selection**: Choose from configured SSH hosts using arrow keys
 - **Automatic Port Detection**: Scans remote host for listening ports using `netstat`, `ss`, or `lsof`
 - **Manual Port Forwarding**: Option to manually specify remote ports with improved UI
+- **Smart Port Mapping**: Tries to use same port locally (e.g., remote:3000 → localhost:3000)
 - **Real-time Port Forwarding**: Creates SSH tunnels using `ssh -L` command
 - **Clean TUI Interface**: Built with Bubble Tea for a smooth terminal experience
 
@@ -30,14 +31,24 @@ go build -o kport
    ./kport
    ```
 
-2. **Select SSH Host**: Use arrow keys to navigate and press Enter to select an SSH host from your config
+2. **Test port mapping** (optional):
+   ```bash
+   ./kport --test-port 3000
+   # Shows: ✅ Port 3000 available locally - using same port
+   #        Mapping: localhost:3000 -> remote:3000
+   ```
 
-3. **Choose Port**: 
+3. **Select SSH Host**: Use arrow keys to navigate and press Enter to select an SSH host from your config
+
+4. **Choose Port**: 
    - The app will automatically detect open ports on the remote host
    - Select a port to forward using arrow keys and Enter
    - Press 'm' for manual port entry
 
-4. **Port Forwarding**: Once started, the app will show the local port that forwards to your remote port
+5. **Port Forwarding**: 
+   - kport tries to use the same port locally (e.g., remote:3000 → localhost:3000)
+   - If unavailable, it uses a random available port
+   - Clear feedback shows the actual mapping and access URLs
 
 ## Controls
 
