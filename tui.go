@@ -357,19 +357,53 @@ func (m *Model) renderManualPort() string {
 	var s strings.Builder
 	
 	host := m.hosts[m.selectedHost]
-	s.WriteString(fmt.Sprintf("Manual port forwarding for %s:\n\n", host.Name))
+	hostStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true)
 	
-	s.WriteString("Enter remote port number: ")
+	s.WriteString(fmt.Sprintf("Manual port forwarding for %s:\n\n", hostStyle.Render(host.Name)))
 	
-	inputStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1)
+	// Label for the input
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Bold(true)
 	
-	s.WriteString(inputStyle.Render(m.manualPort))
+	s.WriteString(labelStyle.Render("Remote port number:"))
 	s.WriteString("\n\n")
 	
+	// Input box styling
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7D56F4")).
+		Padding(0, 1).
+		Width(20).
+		Align(lipgloss.Left)
+	
+	// Show placeholder or current input
+	displayText := m.manualPort
+	if displayText == "" {
+		placeholderStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#666666")).
+			Italic(true)
+		displayText = placeholderStyle.Render("e.g., 3000")
+	}
+	
+	s.WriteString(inputStyle.Render(displayText))
+	s.WriteString("\n\n")
+	
+	// Add cursor indicator
+	if m.manualPort != "" {
+		cursorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF75B7"))
+		s.WriteString(cursorStyle.Render("│"))
+		s.WriteString("\n\n")
+	} else {
+		s.WriteString("\n")
+	}
+	
 	s.WriteString("Controls:\n")
-	s.WriteString("  Enter: Start forwarding  Esc: Back  q: Quit\n")
+	s.WriteString("  0-9: Enter digits  Backspace: Delete  Enter: Start forwarding\n")
+	s.WriteString("  Esc: Back  q: Quit\n")
 
 	return s.String()
 }
