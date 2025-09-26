@@ -2,6 +2,10 @@
 
 A terminal user interface (TUI) application for SSH port forwarding that reads from your local SSH config, allows you to select SSH connections, detects running ports on remote hosts, and forwards them to localhost.
 
+![kport TUI Interface](screenshots/main.png)
+
+*Interactive terminal interface for SSH port forwarding with host selection and port detection*
+
 ## Features
 
 - **SSH Config Integration**: Automatically reads from `~/.ssh/config`
