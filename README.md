@@ -88,7 +88,10 @@ kport supports the SSH `Include` directive, allowing you to organize your SSH co
 - **Glob patterns**: `Include ~/.ssh/config.d/*`
 - **Specific files**: `Include ~/.ssh/work-config`
 - **Relative paths**: `Include config.d/servers`
+- **Quoted paths**: `Include "gitpod/config"` or `Include 'path with spaces/config'`
 - **Cycle detection**: Prevents infinite loops from circular includes
+
+Relative paths in includes are resolved relative to `~/.ssh/` directory, matching OpenSSH behavior.
 
 ## Authentication
 
